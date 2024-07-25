@@ -2,7 +2,7 @@
 # Module for converting Swagger 2.0 files to TOSCA
 #
 __author__ = "Chris Lauwers"
-__copyright__ = "Copyright (c) 2020-2022, Ubicity Corp."
+__copyright__ = "Copyright (c) 2020-2024, Ubicity Corp."
 __email__ = "lauwers@ubicity.com"
 
 # Logging support

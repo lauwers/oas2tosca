@@ -2,7 +2,7 @@
 # Module for tracking TOSCA Profiles generated from k8s swagger file
 #
 __author__ = "Chris Lauwers"
-__copyright__ = "Copyright (c) 2021-2022, Ubicity Corp."
+__copyright__ = "Copyright (c) 2021-2024, Ubicity Corp."
 __email__ = "lauwers@ubicity.com"
 
 # Logging support

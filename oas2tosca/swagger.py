@@ -2,7 +2,7 @@
 # Module for converting Swagger files to TOSCA
 #
 __author__ = "Chris Lauwers"
-__copyright__ = "Copyright (c) 2021-2022, Ubicity Corp."
+__copyright__ = "Copyright (c) 2021-2024, Ubicity Corp."
 __email__ = "lauwers@ubicity.com"
 
 # Logging support
@@ -22,14 +22,11 @@ def get_version(data):
 
     Args:
       data(dict): OpenAPI document
-
     Returns
       version(string)
-
     Raises:
       KeyError: when no version information found
     """
-
     try:
         # OpenAPI v2 uses the 'swagger' attribute to store version
         # information
@@ -74,20 +71,16 @@ class Swagger(object):
            the other profiles on which the profile depends
            (e.g. because properties use schemas defined in other
            profiles).
-
         2. Scan all the “paths” in the swagger file to find those path
            objects that include a POST operation (under the assumption
            that those paths represent objects that can be
            “instantiated”).
-
         3. Create TOSCA Node Types based on the schemas used for the
            payload in the POST operation.
-
         4. For each property defined in those payload schemas, find
            the corresponding schema in the swagger file that is used
            as the “type” for that property, and create a corresponding
            data type.
-
         """
         # Get the names of the profiles that need to be created and
         # their dependencies on other profiles
@@ -115,7 +108,6 @@ class Swagger(object):
         property definitions. The 'profile' parts of those schema
         names determine other profiles on which each profile depends
         """
-
         self.profiles = dict()
 
         # Get the set of schema definitions
@@ -128,9 +120,9 @@ class Swagger(object):
 
     def collect_profile_info_from_schema(self, schema_name, schema):
         """Find profile names in a schema definition"""
-        
         # Extract the profile name from the schema name.
         profile_name, version, resource, prefix = self.parse_schema_name(schema_name, schema)
+        logger.debug("SCHEMA %s: %s, %s, %s, %s", schema_name, profile_name, version, resource, prefix)
         if not profile_name:
             return
         
@@ -280,7 +272,6 @@ class Swagger(object):
         servers([Server Object]): An alternative server array to
           service all operations in this path.
         """
-
         # Can we create a resource on this path?
         try:
             post = value['post']
@@ -345,7 +336,6 @@ class Swagger(object):
           https://swagger.io/specification/
 
         """
-        
         # Avoid duplicates
         if schema_name in self.node_types:
             logger.debug("%s: duplicate", schema_name)
@@ -365,9 +355,11 @@ class Swagger(object):
 
         # Parse group, version, prefix, and kind from the schema name. 
         group, version, kind, prefix = self.parse_schema_name(schema_name, schema)
+        logger.debug("%s: group '%s', version '%s', kind '%s', prefix '%s'",
+                    schema_name, group, version, kind, prefix)
         # For now, we only handle v1
         if version and version != 'v1':
-            logger.debug("Ignoring %s version of %s", version, kind)
+            logger.info("Ignoring %s version of %s", version, kind)
             return
 
         # k8s 'resources' include a 'x-kubernetes-group-version-kind'
@@ -376,7 +368,7 @@ class Swagger(object):
         try:
             group_version_kind_list = schema['x-kubernetes-group-version-kind']
         except KeyError:
-            logger.error("%s: creating node type without group version kind", schema_name)
+            logger.debug("%s: creating node type without group version kind", schema_name)
 
         # Make sure we plan deferred creation of data types for any
         # properties defined in this schema
@@ -407,7 +399,6 @@ class Swagger(object):
 
     def create_data_type_from_schema(self, schema_name, schema):
         """Create a TOSCA data type from a JSON Schema"""
-
         # Avoid duplicates
         if schema_name in self.data_types:
             logger.debug("%s: duplicate", schema_name)

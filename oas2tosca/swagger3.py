@@ -2,7 +2,7 @@
 # Module for converting OpenAPI v3 files to TOSCA
 #
 __author__ = "Chris Lauwers"
-__copyright__ = "Copyright (c) 2021-2022, Ubicity Corp."
+__copyright__ = "Copyright (c) 2021-2024, Ubicity Corp."
 __email__ = "lauwers@ubicity.com"
 
 # Logging support
@@ -62,44 +62,32 @@ class Swagger3(oas2tosca.swagger.Swagger):
         external documentation.
 
     """
-
     def get_schemas(self):
         """Get schemas for data type definitions from the 'components' section
         of the swagger file.
 
         The components section includes the following:
-
           schemas (Map[string, Schema Object | Reference Object]): An
             object to hold reusable Schema Objects.
-
           responses (Map[string, Response Object | Reference Object]):
             An object to hold reusable Response Objects.
-
           parameters (Map[string, Parameter Object | Reference
             Object]): An object to hold reusable Parameter Objects.
-
           examples (Map[string, Example Object | Reference Object]):
             An object to hold reusable Example Objects.
-
           requestBodies (Map[string, Request Body Object | Reference
             Object]): An object to hold reusable Request Body Objects.
-
           headers (Map[string, Header Object | Reference Object]): An
             object to hold reusable Header Objects.
-
           securitySchemes (Map[string, Security Scheme Object |
             Reference Object]): An object to hold reusable Security
             Scheme Objects.
-
           links (Map[string, Link Object | Reference Object]): An
             object to hold reusable Link Objects.
-
           callbacks (Map[string, Callback Object | Reference Object]):
             An object to hold reusable Callback Objects.
-
         """
         # Make sure this swagger file has defines schemas
-
         try:
             return self.data['components']['schemas']
         except KeyError:
@@ -252,13 +240,11 @@ class Swagger3(oas2tosca.swagger.Swagger):
         description (string ): A brief description of the request
           body. This could contain examples of use. CommonMark syntax
           MAY be used for rich text representation.
-
         content(Map[string, Media Type Object] ): REQUIRED. The
           content of the request body. The key is a media type or
           media type range and the value describes it. For requests
           that match multiple keys, only the most specific key is
           applicable. e.g. text/plain overrides text/*
-
         required (boolean): Determines if the request body is required
           in the request. Defaults to false.
 
