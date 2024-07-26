@@ -149,10 +149,11 @@ class Swagger3(oas2tosca.swagger.Swagger):
 
         # For now, we don't create TOSCA type definitions based on
         # parameters
+        logger.info("Parameter '%s' processing not implemented", value['name'])
         pass
 
 
-    def process_operation_object(self, name, value):
+    def process_operation_object(self, name, value, operation):
         """An Operation Object in Swagger 3 has the following:
 
         tags ([string]): A list of tags for API documentation
@@ -223,17 +224,23 @@ class Swagger3(oas2tosca.swagger.Swagger):
           specified at the Path Item Object or Root level, it will be
           overridden by this value.
         """
-        # We create node types based on the request body in this POST
-        # operation
-        try:
-            body = value['requestBody']
-        except KeyError:
-            logger.error("%s: no request body", name)
-            return
-
-        self.process_request_body(name, body)
-
+        if operation == 'POST' or operation == 'PUT':
+            # Try to create a node type based on the request body
+            try:
+                body = value['requestBody']
+                self.process_request_body(name, body)
+            except KeyError:
+                logger.error("%s: no request body in %s operation", name, operation)
+        elif operation == 'GET':
+            # Then, try to create a node type based on the success
+            # response 
+            try:
+                response = value['responses']['200']
+                self.process_response(name, response)
+            except KeyError:
+                logger.error("%s: no responses in GET operation", name)
         
+
     def process_request_body(self, name, body):
         """An Request Body Object in Swagger 3 has the following:
 
@@ -260,7 +267,39 @@ class Swagger3(oas2tosca.swagger.Swagger):
             pass
         
 
-    def process_media_type_object(self, name, media_type):
+    def process_response(self, name, response):
+        """A Response Object in Swagger 3 has the following:
+        
+        description (string):. A description of the
+          response. CommonMark syntax MAY be used for rich text
+          representation.
+        headers (Map[string, Header Object | Reference Object]): Maps
+          a header name to its definition. RFC7230 states header names
+          are case insensitive. If a response header is defined with
+          the name "Content-Type", it SHALL be ignored.
+        content (Map[string, Media Type Object]): A map containing
+          descriptions of potential response payloads. The key is a
+          media type or media type range and the value describes
+          it. For responses that match multiple keys, only the most
+          specific key is applicable. e.g. text/plain overrides text/*
+        links (Map[string, Link Object | Reference Object]): A map of
+          operations links that can be followed from the response. The
+          key of the map is a short name for the link, following the
+          naming constraints of the names for Component Objects.
+
+        """
+        content = response['content']
+
+        try:
+            # We only support JSON content
+            json_content = content['application/json']
+            self.process_media_type_object(name, json_content, True)
+        except KeyError:
+            logger.info("%s: no JSON content", name)
+            pass
+
+
+    def process_media_type_object(self, name, media_type, emit_contained_if_container=False):
         """A Media Type Object in Swagger 3 has the following:
 
         schema (Schema Object | Reference Object ): The schema
@@ -291,4 +330,4 @@ class Swagger3(oas2tosca.swagger.Swagger):
         # in this schema object must be ignored according to the
         # JSONSchema spec)
         schema = media_type['schema']
-        self.create_node_type_from_schema_reference(name, schema)
+        self.create_node_type_from_schema_reference(name, schema, emit_contained_if_container)

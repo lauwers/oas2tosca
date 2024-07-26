@@ -1,5 +1,5 @@
 #
-# Module for tracking TOSCA Profiles generated from k8s swagger file
+# Module for tracking TOSCA Profiles generated from swagger file
 #
 __author__ = "Chris Lauwers"
 __copyright__ = "Copyright (c) 2021-2024, Ubicity Corp."

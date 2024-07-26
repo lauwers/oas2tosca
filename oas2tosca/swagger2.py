@@ -86,7 +86,7 @@ class Swagger2(oas2tosca.swagger.Swagger):
             return dict()
 
 
-    def process_operation_object(self, name, value):
+    def process_operation_object(self, name, value, operation):
         """An Operation Object in Swagger 2 has the following:
 
         tags([string]): A list of tags for API documentation
@@ -159,7 +159,7 @@ class Swagger2(oas2tosca.swagger.Swagger):
             parameters = value['parameters']
         except KeyError:
             parameters = list()
-        logger.debug("'%s' POST parameters:", name)
+        logger.debug("'%s' VALUE parameters:", name)
         for parameter in parameters:
             self.process_parameter_object(name, parameter)
 
@@ -190,7 +190,6 @@ class Swagger2(oas2tosca.swagger.Swagger):
         schema(Schema Object): Required if 'in' is 'body'. The schema
           defining the type used for the body parameter.
         """
-
         # We create a node type for any resource that has a POST
         # operation with a 'body' parameter
         if not value['in'] == 'body':

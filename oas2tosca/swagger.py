@@ -65,26 +65,32 @@ class Swagger(object):
 
         The conversion process works as follows:
 
-        1. Scan all the schemas defined in the swagger file, and
-           generate a set of 'TOSCA Profile Names' from the
-           corresponding schema names. For each profile, also track
-           the other profiles on which the profile depends
-           (e.g. because properties use schemas defined in other
-           profiles).
-        2. Scan all the “paths” in the swagger file to find those path
-           objects that include a POST operation (under the assumption
-           that those paths represent objects that can be
-           “instantiated”).
-        3. Create TOSCA Node Types based on the schemas used for the
-           payload in the POST operation.
-        4. For each property defined in those payload schemas, find
+        1. Scan all the schemas defined in the swagger file. Schema
+           names may have sub components that can be used to generate
+           a set of 'TOSCA Profile Names' from the corresponding
+           schema names. If schema names don't have subcomponents, a
+           single TOSCA profile will be created. 
+        2. For each profile, we track the other profiles on which the
+           profile depends (e.g. because properties use schemas
+           defined in other profiles).
+        3. Scan all the “paths” in the swagger file since these may
+           represent resources for which TOSCA node types must be
+           create. A path represents a node type if it includes a
+           POST, a PUT, or a GET operation (under the assumption that
+           those paths represent objects that can be instantiated,
+           modified, or retrieved. Note that resources with GET
+           operations may represent containers of other resources.
+        4. Create TOSCA Node Types based on the schemas used for the
+           payload in the POST, PUT, or GET operation.
+        5. For each property defined in those payload schemas, find
            the corresponding schema in the swagger file that is used
            as the “type” for that property, and create a corresponding
            data type.
+
         """
         # Get the names of the profiles that need to be created and
         # their dependencies on other profiles
-        self.collect_profile_info()
+        self.get_profiles_from_schemas()
 
         # Create the directories within which each profile will be
         # created.
@@ -100,13 +106,16 @@ class Swagger(object):
         self.finalize_profiles()
 
 
-    def collect_profile_info(self):
+    def get_profiles_from_schemas(self):
         """For each schema defined in the Swagger object, parse the schema
         name into a 'profile' name and a 'resource' name. We use these
         profile names to generate the set of profiles that need to be
         created.  For each schema, we also find the schemas used in
         property definitions. The 'profile' parts of those schema
         names determine other profiles on which each profile depends
+
+        If no profile name can be parsed from the schema name, use the
+        default profile name.
         """
         self.profiles = dict()
 
@@ -115,16 +124,15 @@ class Swagger(object):
 
         # Process each schema definition
         for schema_name, schema in schemas.items():
-            self.collect_profile_info_from_schema(schema_name, schema)
+            self.get_profile_from_schema(schema_name, schema)
 
 
-    def collect_profile_info_from_schema(self, schema_name, schema):
+    def get_profile_from_schema(self, schema_name, schema):
         """Find profile names in a schema definition"""
         # Extract the profile name from the schema name.
         profile_name, version, resource, prefix = self.parse_schema_name(schema_name, schema)
         logger.debug("SCHEMA %s: %s, %s, %s, %s", schema_name, profile_name, version, resource, prefix)
-        if not profile_name:
-            return
+        if not profile_name: profile_name = 'default'
         
         # We only handle 'v1' schemas for now
         if version and version != "v1":
@@ -272,28 +280,33 @@ class Swagger(object):
         servers([Server Object]): An alternative server array to
           service all operations in this path.
         """
-        # Can we create a resource on this path?
-        try:
-            post = value['post']
-        except KeyError:
-            post = None
-        if not post:
-            logger.debug("'%s' does not have POST", name)
-            return
-        
         # Are there path-level parameters?
         try:
             parameters = value['parameters']
+            for parameter in parameters:
+                self.process_parameter_object(name, parameter)
         except KeyError:
-            parameters = list()
-        logger.debug("'%s' parameters:", name)
-        for parameter in parameters:
-            self.process_parameter_object(name, parameter)
-            
-        self.process_operation_object(name, post)
+            pass
 
+        # Can we create a node type for this resource?
+        try:
+            post = value['post']
+            self.process_operation_object(name, post, 'POST')
+        except KeyError:
+            pass
+        try:
+            put = value['put']
+            self.process_operation_object(name, put, 'PUT')
+        except KeyError:
+            pass
+        try:
+            get = value['get']
+            self.process_operation_object(name, get, 'GET')
+        except KeyError:
+            pass
         
-    def create_node_type_from_schema_reference(self, name, reference):
+            
+    def create_node_type_from_schema_reference(self, name, reference, emit_contained_if_container=False):
         """Create a TOSCA node type from a JSON Schema reference"""
 
         # Get the referenced schema
@@ -308,7 +321,22 @@ class Swagger(object):
         if not node_type_schema:
             logger.error("%s: referenced schema not found", name)
             return
-        
+
+        # Emit container or contained element?
+        if emit_contained_if_container:
+            # A schema defines a container if it has a single property
+            # of type array.
+            try:
+                properties = node_type_schema['properties']
+                [property_name] = list(properties)
+                property = properties[property_name]
+                if property['type'] == 'array':
+                    ref = property['items']['$ref']                        
+                    (schema_ref, node_type_schema) = self.get_referenced_schema(ref)
+            except Exception as e:
+                # Not a container
+                pass
+
         # Create the node type for the referenced schema
         self.create_node_type_from_schema(schema_ref, node_type_schema)
 
@@ -355,8 +383,9 @@ class Swagger(object):
 
         # Parse group, version, prefix, and kind from the schema name. 
         group, version, kind, prefix = self.parse_schema_name(schema_name, schema)
+        if not group: group = 'default'
         logger.debug("%s: group '%s', version '%s', kind '%s', prefix '%s'",
-                    schema_name, group, version, kind, prefix)
+                     schema_name, group, version, kind, prefix)
         # For now, we only handle v1
         if version and version != 'v1':
             logger.info("Ignoring %s version of %s", version, kind)
@@ -394,7 +423,7 @@ class Swagger(object):
             # Get the schema name
             self.create_data_type_from_schema(definition, value)
             if definition in self.node_types:
-                logger.info("%s is also node type", key)
+                logger.info("%s is also node type", definition)
 
 
     def create_data_type_from_schema(self, schema_name, schema):
@@ -416,7 +445,7 @@ class Swagger(object):
 
         # Parse group, version, and kind from the schema name. 
         group, version, kind, prefix = self.parse_schema_name(schema_name, schema)
-        
+        if not group: group = 'default'
         # We only handle v1 for now
         if version and version != "v1":
             logger.info("Ignoring %s version of %s", version, kind)
