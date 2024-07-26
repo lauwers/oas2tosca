@@ -364,12 +364,6 @@ class Swagger(object):
           https://swagger.io/specification/
 
         """
-        # Avoid duplicates
-        if schema_name in self.node_types:
-            logger.debug("%s: duplicate", schema_name)
-            return
-        self.node_types.add(schema_name)
-        
         # If this schema is intended to define a node type, the schema
         # 'type' better be 'object'.
         try:
@@ -377,9 +371,27 @@ class Swagger(object):
                 logger.error("Node type '%s' with type '%s'", schema_name, schema['type'])
                 return
         except KeyError:
-                logger.error("Trying to create node type '%s' without a type",
-                             schema_name)
-                return
+            logger.error("Trying to create node type '%s' without a type",
+                         schema_name)
+            return
+
+        # Avoid duplicates
+        if schema_name in self.node_types:
+            logger.debug("%s: duplicate", schema_name)
+            return
+        self.node_types.add(schema_name)
+
+        # Check inheritance?
+        try:
+            all_of = schema['allOf']
+            for ref in all_of:
+                try:
+                    self.create_node_type_from_schema_reference(schema_name, ref)
+                except Exception as e:
+                    logger.error("BASE: %s", str(e))
+        except KeyError:
+            # No base schemas
+            pass
 
         # Parse group, version, prefix, and kind from the schema name. 
         group, version, kind, prefix = self.parse_schema_name(schema_name, schema)
@@ -428,12 +440,6 @@ class Swagger(object):
 
     def create_data_type_from_schema(self, schema_name, schema):
         """Create a TOSCA data type from a JSON Schema"""
-        # Avoid duplicates
-        if schema_name in self.data_types:
-            logger.debug("%s: duplicate", schema_name)
-            return
-        self.data_types.add(schema_name)
-
         # If this schema is intended to define a data type, this
         # schema must not reference another schema.
         try:
@@ -441,6 +447,20 @@ class Swagger(object):
             logger.error("%s REFERENCES %s", schema_name, ref)
             return
         except KeyError:
+            pass
+
+        # Avoid duplicates
+        if schema_name in self.data_types:
+            logger.debug("%s: duplicate", schema_name)
+            return
+        self.data_types.add(schema_name)
+
+        # Check inheritance?
+        try:
+            all_of = schema['allOf']
+            logger.error("%s: inheritance not implemented", schema_name)
+        except KeyError:
+            # No base schemas
             pass
 
         # Parse group, version, and kind from the schema name. 

@@ -256,8 +256,21 @@ class Swagger3(oas2tosca.swagger.Swagger):
           in the request. Defaults to false.
 
         """
-        content = body['content']
+        # Is this an indirection?
+        try:
+            ref = body['$ref']
+            (body_name, body) = self.get_referenced_schema(ref)
+            self.process_request_body(name, body)
+            return
+        except KeyError:
+            # Not an indirection
+            pass
+        except Exception as e:
+            logger.error("REQ BOD: %s", str(e))
+            return
 
+        # Process
+        content = body['content']
         try:
             # We only support JSON content
             json_content = content['application/json']

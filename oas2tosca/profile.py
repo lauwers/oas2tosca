@@ -241,12 +241,27 @@ class Profile(object):
             logger.error("%s: 'enum' not supported", kind)
         except KeyError:
             pass
-        
-        # For now, we always derive node types from Root
-        self.out.write("%sderived_from: tosca.nodes.Root\n" % indent)
+
+        # Derived from
+        self.emit_derived_from(indent, kind, schema)
 
         # Process remaining keywords
         self.process_keywords_for_object(indent, kind, schema)
+
+
+    def emit_derived_from(self, indent, kind, schema):
+        # Check inheritance?
+        try:
+            all_of = schema['allOf']
+            if len(all_of) != 1:
+                logger.error("%s: multiple inheritance", kind)
+            schema_name = self.get_ref(all_of[0]['$ref'])
+            group, version, base, prefix = parse_schema_name(schema_name)
+            self.out.write("%sderived_from: %s\n" % (indent, base))
+        except KeyError:
+            # No base schemas
+            # For now, we always derive node types from Root
+            self.out.write("%sderived_from: tosca.nodes.Root\n" % indent)
 
 
     def emit_data_type(self, kind, schema):
