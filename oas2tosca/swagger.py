@@ -413,6 +413,7 @@ class Swagger(object):
 
         # Make sure we plan deferred creation of data types for any
         # properties defined in this schema
+        logger.info("NODE TYPE %s: create data types", kind)
         self.create_data_types_for_properties(schema, defer=True)
 
         # Create the node type in the profile for this schema
@@ -463,6 +464,31 @@ class Swagger(object):
             # No base schemas
             pass
 
+        # If we derive from array, create type for entry schema
+        try:
+            schema_type = schema['type']
+            if schema_type == "array":
+                entry_schema = schema['items']
+                try:
+                    ref = entry_schema['$ref']
+                    (entry_schema_name, entry_schema) = self.get_referenced_schema(ref)
+                    self.create_data_type_from_schema(entry_schema_name, entry_schema)
+                except KeyError:
+                    # Check allOf
+                    try:
+                        all_of = entry_schema['allOf']
+                        for element in all_of:
+                            ref = element['$ref']
+                            (entry_schema_name, entry_schema) = self.get_referenced_schema(ref)
+                            self.create_data_type_from_schema(entry_schema_name, entry_schema)
+                    except KeyError:
+                        pass
+        except KeyError:
+            # No base schemas
+            pass
+        except Exception as e:
+            logger.error("ARRAY: %s", str(e))
+            
         # Parse group, version, and kind from the schema name. 
         group, version, kind, prefix = self.parse_schema_name(schema_name, schema)
         if not group: group = 'default'
@@ -484,6 +510,7 @@ class Swagger(object):
         # Make sure we define data types for any properties defined in
         # this schema
         try:
+            logger.info("DATA TYPE %s: create data types", kind)
             self.create_data_types_for_properties(schema)
         except Exception as e:
             logger.error("%s: %s", schema_name, str(e))
@@ -505,38 +532,84 @@ class Swagger(object):
 
         # Do any properties reference schemas?
         for property_name, property_schema in properties.items():
+            logger.info("PROPERY %s", property_name)
             try:
-                ref = property_schema['$ref']
+                self.create_data_type_for_property(schema, property_schema, defer)
+            except Exception as e:
+                logger.error("ERROR creating data type: %s", str(e))
+                
+    def create_data_type_for_property(self, schema, property_schema, defer):
+        """Create data types for property schemas referenced in this schema
+        """
+        # Check $ref
+        try:
+            ref = property_schema['$ref']
+            (schema_name, schema) = self.get_referenced_schema(ref)
+            logger.info("FOUND %s in $ref", schema_name)
+            if defer:
+                self.deferred_schemas.add(schema_name)
+            else:
+                self.create_data_type_from_schema(schema_name, schema)
+            return
+        except KeyError:
+            pass
+        # Check allOf
+        try:
+            all_of = property_schema['allOf']
+            for element in all_of:
+                ref = element['$ref']
                 (schema_name, schema) = self.get_referenced_schema(ref)
+                logger.info("FOUND %s in allOf", schema_name)
                 if defer:
                     self.deferred_schemas.add(schema_name)
                 else:
                     self.create_data_type_from_schema(schema_name, schema)
+            return
+        except KeyError:
+            pass
+        # Check items
+        try:
+            items = property_schema['items']
+            try:
+                ref = items['$ref']
+                (schema_name, schema) = self.get_referenced_schema(ref)
+                logger.info("FOUND %s in items $ref", schema_name)
+                if defer:
+                    self.deferred_schemas.add(schema_name)
+                else:
+                    self.create_data_type_from_schema(schema_name, schema)
+                return
             except KeyError:
-                # Property schema does not contain a $ref. Items
-                # perhaps?
-                try:
-                    items = property_schema['items']
-                    ref = items['$ref']
+                pass
+            # Check allOf
+            try:
+                all_of = items['allOf']
+                for element in all_of:
+                    ref = element['$ref']
                     (schema_name, schema) = self.get_referenced_schema(ref)
+                    logger.info("FOUND %s in items allOf", schema_name)
                     if defer:
                         self.deferred_schemas.add(schema_name)
                     else:
                         self.create_data_type_from_schema(schema_name, schema)
-                except KeyError:
-                    try:
-                        additionalProperties = property_schema['additionalProperties']
-                        ref = additionalProperties['$ref']
-                        (schema_name, schema) = self.get_referenced_schema(ref)
-                        if defer:
-                            self.deferred_schemas.add(schema_name)
-                        else:
-                            self.create_data_type_from_schema(schema_name, schema)
-                    except KeyError:
-                        # No additional schemas
-                        pass
-                    pass
-
+                return
+            except KeyError:
+                pass
+        except KeyError:
+            pass
+        # Check additionalProperties
+        try:
+            additionalProperties = property_schema['additionalProperties']
+            ref = additionalProperties['$ref']
+            (schema_name, schema) = self.get_referenced_schema(ref)
+            logger.info("FOUND %s in additionalProperties", schema_name)
+            if defer:
+                self.deferred_schemas.add(schema_name)
+            else:
+                self.create_data_type_from_schema(schema_name, schema)
+        except KeyError:
+            # No additional schemas
+            pass
 
     def get_referenced_schema(self, ref):
         """Return the schema referenced by the 'ref' URL. This method returns

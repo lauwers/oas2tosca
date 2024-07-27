@@ -983,11 +983,23 @@ class Profile(object):
                 self.out.write("%stype: %s\n" % (indent, type_name))
                 # All other keywords must be ignored
             except KeyError:
-                # Not a ref either.  This property can be of any
-                # type. Given the lack of 'any' in TOSCA, we'll just
-                # use 'string'
-                self.out.write("%stype: string\n" % indent )
-                self.process_keywords_for_any(indent, property_name, schema)
+                # Not a ref either. Check allOf.
+                try:
+                    all_of = schema['allOf']
+                    if len(all_of) != 1:
+                        logger.error("%s: multiple inheritance", property_name)
+                    schema_name = self.get_ref(all_of[0]['$ref'])
+                    group, version, kind, prefix = parse_schema_name(schema_name)
+                    if prefix and prefix != self.prefix:
+                        type_name = prefix + ':' + kind
+                    else:
+                        type_name = kind
+                        self.out.write("%stype: %s\n" % (indent, type_name))
+                except KeyError:
+                    #  This property can be of any type. Given the
+                    # lack of 'any' in TOSCA, we'll just use 'string'
+                    self.out.write("%stype: string\n" % indent )
+                    self.process_keywords_for_any(indent, property_name, schema)
 
 
     def get_string_type_from_schema(self, schema):
